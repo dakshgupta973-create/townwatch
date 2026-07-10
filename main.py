@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 
 import httpx
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
 app = FastAPI(
@@ -283,8 +283,113 @@ async def skillmd(request: Request):
         return f.read().replace("{{BASE_URL}}", base)
 
 
-@app.get("/")
+HOME_HTML = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Town Watch — trust layer for NANDA Town</title>
+<style>
+  :root { --bg:#0e1116; --card:#161b23; --line:#242c38; --txt:#e6edf3;
+          --dim:#8b98a9; --acc:#4ea1ff; --ok:#3fb950; --warn:#d29922; --bad:#f85149; }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--bg); color:var(--txt); font:16px/1.6 -apple-system,
+         BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; padding:40px 20px; }
+  main { max-width:860px; margin:0 auto; }
+  h1 { font-size:34px; } h1 span { color:var(--acc); }
+  .sub { color:var(--dim); margin:6px 0 28px; font-size:18px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
+          padding:22px; margin-bottom:18px; }
+  .card h2 { font-size:19px; margin-bottom:6px; }
+  .card p { color:var(--dim); font-size:15px; margin-bottom:14px; }
+  button { background:var(--acc); color:#fff; border:0; border-radius:8px;
+           padding:10px 18px; font-size:15px; font-weight:600; cursor:pointer; }
+  button:hover { filter:brightness(1.15); }
+  pre { background:#0a0d12; border:1px solid var(--line); border-radius:8px;
+        padding:14px; margin-top:14px; font-size:13px; overflow-x:auto;
+        white-space:pre-wrap; word-break:break-word; display:none; }
+  .badge { display:none; margin-top:14px; padding:10px 14px; border-radius:8px;
+           font-weight:700; font-size:15px; }
+  .rely { background:rgba(63,185,80,.15); color:var(--ok); }
+  .caution { background:rgba(210,153,34,.15); color:var(--warn); }
+  .avoid { background:rgba(248,81,73,.15); color:var(--bad); }
+  .links { color:var(--dim); font-size:14px; margin-top:26px; }
+  .links a { color:var(--acc); text-decoration:none; }
+</style></head><body><main>
+  <h1>Town <span>Watch</span></h1>
+  <p class="sub">The trust layer for NANDA Town. Agents ask one question:
+  <em>&ldquo;Can I rely on this skill right now?&rdquo;</em> &mdash; and get a live-checked answer.</p>
+
+  <div class="card">
+    <h2>1 &middot; The verdict &mdash; it judges its own SkillMD</h2>
+    <p>Fetches this service's own skill.md, lints it for agent-readability, and
+       live-checks every link inside. The exact call a judge's agent would make.</p>
+    <button onclick="run(this,'verdict')">Run self-verdict</button>
+    <div class="badge"></div><pre></pre>
+  </div>
+
+  <div class="card">
+    <h2>2 &middot; The linter &mdash; catches a broken SkillMD</h2>
+    <p>Scores a deliberately bad SkillMD (no URL, needs human help). Watch it
+       fail with concrete fixes an author could apply.</p>
+    <button onclick="run(this,'lint')">Lint a broken SkillMD</button>
+    <div class="badge"></div><pre></pre>
+  </div>
+
+  <div class="card">
+    <h2>3 &middot; The probe &mdash; is a service alive right now?</h2>
+    <p>Live latency and liveness for this service: root, /health, and /skill.md.</p>
+    <button onclick="run(this,'probe')">Probe this service</button>
+    <div class="badge"></div><pre></pre>
+  </div>
+
+  <p class="links">Agents start at <a href="/skill.md">/skill.md</a> &middot;
+     interactive API reference at <a href="/docs">/docs</a> &middot;
+     liveness at <a href="/health">/health</a></p>
+</main>
+<script>
+const B = window.location.origin;
+const BAD = "# My Skill\\nIt does stuff. Contact us to get access.";
+async function run(btn, kind) {
+  const card = btn.closest('.card'), pre = card.querySelector('pre'),
+        badge = card.querySelector('.badge');
+  btn.disabled = true; btn.textContent = 'Running…';
+  try {
+    let r, label = '', cls = 'rely';
+    if (kind === 'verdict') {
+      r = await (await fetch(B + '/verdict?skill_url=' + encodeURIComponent(B + '/skill.md'))).json();
+      label = 'Verdict: ' + r.verdict.toUpperCase() + ' — score ' + r.score + '/100, grade ' + r.grade;
+      cls = r.verdict;
+    } else if (kind === 'lint') {
+      r = await (await fetch(B + '/lint', { method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ skillmd: BAD, live_check: false }) })).json();
+      label = 'Score ' + r.score + '/100 (grade ' + r.grade + ') — ' +
+              r.issues.length + ' issues found, agent_ready: ' + r.agent_ready;
+      cls = r.agent_ready ? 'rely' : 'avoid';
+    } else {
+      r = await (await fetch(B + '/probe?base_url=' + encodeURIComponent(B))).json();
+      label = r.up ? 'UP — root ' + r.checks.root.latency_ms + 'ms, health ' +
+              r.checks.health_endpoint.latency_ms + 'ms' : 'DOWN';
+      cls = r.up ? 'rely' : 'avoid';
+    }
+    badge.textContent = label; badge.className = 'badge ' + cls;
+    badge.style.display = 'block';
+    pre.textContent = JSON.stringify(r, null, 2); pre.style.display = 'block';
+  } catch (e) {
+    badge.textContent = 'Request failed: ' + e; badge.className = 'badge avoid';
+    badge.style.display = 'block';
+  }
+  btn.disabled = false; btn.textContent = 'Run again';
+}
+</script></body></html>"""
+
+
+@app.get("/", response_class=HTMLResponse)
 async def root():
+    return HOME_HTML
+
+
+@app.get("/info")
+async def info():
     return {
         "service": "Town Watch",
         "what": "Trust & lint layer for the NANDA Town registry.",
