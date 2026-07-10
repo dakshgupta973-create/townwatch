@@ -311,6 +311,10 @@ HOME_HTML = """<!doctype html>
   .rely { background:rgba(63,185,80,.15); color:var(--ok); }
   .caution { background:rgba(210,153,34,.15); color:var(--warn); }
   .avoid { background:rgba(248,81,73,.15); color:var(--bad); }
+  input, textarea { width:100%; background:#0a0d12; border:1px solid var(--line);
+        border-radius:8px; color:var(--txt); padding:10px 12px; font-size:14px;
+        margin-bottom:10px; font-family:inherit; resize:vertical; }
+  .card button + textarea { margin-top:14px; }
   .links { color:var(--dim); font-size:14px; margin-top:26px; }
   .links a { color:var(--acc); text-decoration:none; }
 </style></head><body><main>
@@ -341,6 +345,17 @@ HOME_HTML = """<!doctype html>
     <div class="badge"></div><pre></pre>
   </div>
 
+  <div class="card">
+    <h2>4 &middot; Try your own &mdash; judge any skill</h2>
+    <p>Paste the URL of any skill.md to get a live verdict, or paste raw
+       SkillMD text below to lint it.</p>
+    <input id="skillUrl" type="url" placeholder="https://some-service.onrender.com/skill.md">
+    <button onclick="run(this,'customVerdict')">Get verdict</button>
+    <textarea id="skillText" rows="5" placeholder="...or paste raw SkillMD text here"></textarea>
+    <button onclick="run(this,'customLint')">Lint text</button>
+    <div class="badge"></div><pre></pre>
+  </div>
+
   <p class="links">Agents start at <a href="/skill.md">/skill.md</a> &middot;
      interactive API reference at <a href="/docs">/docs</a> &middot;
      liveness at <a href="/health">/health</a></p>
@@ -365,6 +380,22 @@ async function run(btn, kind) {
       label = 'Score ' + r.score + '/100 (grade ' + r.grade + ') — ' +
               r.issues.length + ' issues found, agent_ready: ' + r.agent_ready;
       cls = r.agent_ready ? 'rely' : 'avoid';
+    } else if (kind === 'customVerdict') {
+      const u = document.getElementById('skillUrl').value.trim();
+      if (!u) throw 'enter a skill.md URL first';
+      r = await (await fetch(B + '/verdict?skill_url=' + encodeURIComponent(u))).json();
+      label = r.verdict ? 'Verdict: ' + r.verdict.toUpperCase() + ' — score ' +
+              r.score + '/100' + (r.grade ? ', grade ' + r.grade : '') : JSON.stringify(r);
+      cls = r.verdict || 'avoid';
+    } else if (kind === 'customLint') {
+      const t = document.getElementById('skillText').value;
+      if (!t.trim()) throw 'paste some SkillMD text first';
+      r = await (await fetch(B + '/lint', { method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ skillmd: t, live_check: true }) })).json();
+      label = 'Score ' + r.score + '/100 (grade ' + r.grade + ') — ' +
+              r.issues.length + ' issues, agent_ready: ' + r.agent_ready;
+      cls = r.agent_ready ? 'rely' : (r.score >= 50 ? 'caution' : 'avoid');
     } else {
       r = await (await fetch(B + '/probe?base_url=' + encodeURIComponent(B))).json();
       label = r.up ? 'UP — root ' + r.checks.root.latency_ms + 'ms, health ' +
