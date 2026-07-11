@@ -47,8 +47,17 @@ Expected response:
 
 ### GET /health
 
-Liveness check. Returns `{"status": "ok", "service": "townwatch", "time": <unix>}`.
-Call this first if any other request misbehaves.
+Liveness check. Call this first if any other request misbehaves.
+
+```
+curl "{{BASE_URL}}/health"
+```
+
+Example response:
+
+```json
+{"status": "ok", "service": "townwatch", "time": 1783690522.32}
+```
 
 ### GET /verdict
 
@@ -60,6 +69,12 @@ Query parameters:
 
 ```
 curl "{{BASE_URL}}/verdict?skill_url={{BASE_URL}}/skill.md"
+```
+
+Example response:
+
+```json
+{"verdict": "rely", "score": 100, "grade": "A", "reason": "Score 100/100 (grade A). Ready for a vanilla agent.", "dead_links": []}
 ```
 
 Response fields:
@@ -84,6 +99,12 @@ curl -X POST {{BASE_URL}}/lint \
   -d '{"url": "{{BASE_URL}}/skill.md"}'
 ```
 
+Example response (abridged — a low-scoring input returns more issues):
+
+```json
+{"score": 74, "grade": "C", "agent_ready": false, "issues": [{"severity": "error", "message": "Dead link: old-example-service.com (status 0). A SkillMD with dead links does nothing.", "fix": "Fix or remove the link; keep the service awake or note the cold-start delay."}], "endpoints_documented": ["GET /weather"], "urls_alive": [], "urls_dead": [{"url": "old-example-service.com", "status_code": 0, "latency_ms": 8000.1}], "summary": "Score 74/100 (grade C). An agent would likely fail or stall on this SkillMD — apply the fixes."}
+```
+
 Response fields: `score` (0–100), `grade` (A–F), `agent_ready` (boolean —
 true when a vanilla agent could drive the service from this SkillMD alone),
 `issues` (list of `{severity, message, fix}` objects, severities are `error`,
@@ -103,6 +124,12 @@ Query parameters:
 curl "{{BASE_URL}}/probe?base_url={{BASE_URL}}"
 ```
 
+Example response:
+
+```json
+{"base_url": "{{BASE_URL}}", "up": true, "checks": {"root": {"alive": true, "latency_ms": 129.9, "status_code": 200}, "health_endpoint": {"alive": true, "latency_ms": 192.3, "status_code": 200}, "skillmd_served": {"alive": true, "latency_ms": 190.8, "status_code": 200}}, "note": null}
+```
+
 Response fields: `up` (boolean), `checks.root`, `checks.health_endpoint`,
 `checks.skillmd_served` (each with `alive`, `latency_ms`, `status_code`),
 and `note` (non-null only when the target looks asleep).
@@ -116,6 +143,12 @@ Query parameters:
 
 ```
 curl "{{BASE_URL}}/history?url={{BASE_URL}}"
+```
+
+Example response:
+
+```json
+{"url": "{{BASE_URL}}", "checks": 12, "uptime_pct": 100.0, "avg_latency_ms": 161.4, "last_check": {"ts": 1783690522.3, "ok": true, "latency_ms": 129.9}}
 ```
 
 Response fields: `checks` (count), `uptime_pct`, `avg_latency_ms`,
